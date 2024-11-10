@@ -11,37 +11,33 @@ namespace SingleResponsibilityPrinciple
     {
         string url;
         ILogger logger;
+        private HttpClient client;
         public URLTradeDataProvider(string url, ILogger logger)
         {
             this.url = url;
             this.logger = logger;
         }
 
-        public IEnumerable<string> GetTradeData()
+        public async IAsyncEnumerable<string> GetTradeDataAsync()
         {
-            List<string> tradeData = new List<string>();
-            logger.LogInfo("Reading trades from URL: " + url);
+            logger.LogInfo("Connecting to the Restful server using HTTP");
 
-            using (HttpClient client = new HttpClient())
+            HttpResponseMessage response = await client.GetAsync(url);
+            if (response.IsSuccessStatusCode)
             {
-                HttpResponseMessage response = client.GetAsync(url).Result;
-                if (!response.IsSuccessStatusCode)
-                {
-                    logger.LogWarning($"Failed to retrieve data. Status code: {response.StatusCode}");
-                    throw new Exception($"Error retrieving data from URL: {url}");
-                }
+                using Stream stream = await response.Content.ReadAsStreamAsync();
+                using StreamReader reader = new StreamReader(stream);
 
-                using (Stream stream = response.Content.ReadAsStreamAsync().Result)
-                using (StreamReader reader = new StreamReader(stream))
+                while (!reader.EndOfStream)
                 {
-                    string line;
-                    while ((line = reader.ReadLine()) != null)
-                    {
-                        tradeData.Add(line);
-                    }
+                    yield return await reader.ReadLineAsync();
                 }
             }
-            return tradeData;
+            else
+            {
+                logger.LogWarning($"Failed to retrieve data. Status code: {response.StatusCode}");
+                throw new Exception($"Error retrieving data from URL: {url}");
+            }
         }
     }
 }
